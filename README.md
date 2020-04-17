@@ -43,7 +43,7 @@ Below the Macro-F1 score
 |        Model        |     Paper      |     Ours       |
 | ------------------- | -------------- | -------------- |
 | BERT-uncased-base   |     ----       |     88.40      |
-| BERT-uncased-large  |     89.25      |                |
+| BERT-uncased-large  |     89.25      |     89.21      |
 
 
 ## Reference
