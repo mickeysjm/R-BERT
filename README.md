@@ -1,5 +1,8 @@
 # A Pytorch Implementation of R-BERT relation classification model
 
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/enriching-pre-trained-language-model-with/relation-extraction-on-semeval-2010-task-8)](https://paperswithcode.com/sota/relation-extraction-on-semeval-2010-task-8?p=enriching-pre-trained-language-model-with)
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/enriching-pre-trained-language-model-with/relation-extraction-on-tacred)](https://paperswithcode.com/sota/relation-extraction-on-tacred?p=enriching-pre-trained-language-model-with)
+
 This is an unofficial pytorch implementation of `R-BERT` model described paper [Enriching Pre-trained Language Model with Entity Information for Relation Classification](https://arxiv.org/abs/1905.08284).
 
 In addition to the SemEval 2010 dataset tested in the original paper, I aslo test implementation on the more recent [TACRED](https://nlp.stanford.edu/projects/tacred/) dataset 
