@@ -32,44 +32,6 @@ from sklearn.metrics import matthews_corrcoef, f1_score
 
 logger = logging.getLogger(__name__)
 
-def clean_str(text):
-    text = text.lower()
-    # Clean the text
-    text = re.sub(r"[^A-Za-z0-9^,!.\/'+-=]", " ", text)
-    text = re.sub(r"what's", "what is ", text)
-    text = re.sub(r"that's", "that is ", text)
-    text = re.sub(r"there's", "there is ", text)
-    text = re.sub(r"it's", "it is ", text)
-    text = re.sub(r"\'s", " ", text)
-    text = re.sub(r"\'ve", " have ", text)
-    text = re.sub(r"can't", "can not ", text)
-    text = re.sub(r"n't", " not ", text)
-    text = re.sub(r"i'm", "i am ", text)
-    text = re.sub(r"\'re", " are ", text)
-    text = re.sub(r"\'d", " would ", text)
-    text = re.sub(r"\'ll", " will ", text)
-    text = re.sub(r",", " ", text)
-    text = re.sub(r"\.", " ", text)
-    text = re.sub(r"!", " ! ", text)
-    text = re.sub(r"\/", " ", text)
-    text = re.sub(r"\^", " ^ ", text)
-    text = re.sub(r"\+", " + ", text)
-    text = re.sub(r"\-", " - ", text)
-    text = re.sub(r"\=", " = ", text)
-    text = re.sub(r"'", " ", text)
-    text = re.sub(r"(\d+)(k)", r"\g<1>000", text)
-    text = re.sub(r":", " : ", text)
-    text = re.sub(r" e g ", " eg ", text)
-    text = re.sub(r" b g ", " bg ", text)
-    text = re.sub(r" u s ", " american ", text)
-    text = re.sub(r"\0s", "0", text)
-    text = re.sub(r" 9 11 ", "911", text)
-    text = re.sub(r"e - mail", "email", text)
-    text = re.sub(r"j k", "jk", text)
-    text = re.sub(r"\s{2,}", " ", text)
-
-
-RELATION_LABELS = ['Other', 'Message-Topic(e1,e2)', 'Message-Topic(e2,e1)',
 # Used for SemEval dataset
 SEMEVAL_RELATION_LABELS = ['Other', 'Message-Topic(e1,e2)', 'Message-Topic(e2,e1)',
                    'Product-Producer(e1,e2)', 'Product-Producer(e2,e1)',
@@ -81,6 +43,7 @@ SEMEVAL_RELATION_LABELS = ['Other', 'Message-Topic(e1,e2)', 'Message-Topic(e2,e1
                    'Member-Collection(e1,e2)', 'Member-Collection(e2,e1)',
                    'Content-Container(e1,e2)', 'Content-Container(e2,e1)']
 
+# Used for TACRED dataset
 TACRED_RELATION_LABELS = ['org:founded_by', 'no_relation', 'per:employee_of', 'org:alternate_names', 
     'per:cities_of_residence', 'per:children', 'per:title', 'per:siblings', 'per:religion', 
     'per:age', 'org:website', 'per:stateorprovinces_of_residence', 'org:member_of', 
