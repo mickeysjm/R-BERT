@@ -5,13 +5,6 @@ from transformers import (WEIGHTS_NAME, BertConfig, BertModel, BertPreTrainedMod
 from torch.nn import MSELoss, CrossEntropyLoss
 
 
-def l2_loss(parameters):
-    return torch.sum(
-        torch.tensor([
-            torch.sum(p ** 2) / 2 for p in parameters if p.requires_grad
-        ]))
-
-
 class BertForSequenceClassification(BertPreTrainedModel):
     r"""
         **labels**: (`optional`) ``torch.LongTensor`` of shape ``(batch_size,)``:
@@ -49,20 +42,10 @@ class BertForSequenceClassification(BertPreTrainedModel):
     def __init__(self, config):
         super(BertForSequenceClassification, self).__init__(config)
         self.num_labels = config.num_labels
-        self.l2_reg_lambda = config.l2_reg_lambda
         self.bert = BertModel(config)
-        self.latent_entity_typing = config.latent_entity_typing
         self.cls_dropout = nn.Dropout(0.1)  # dropout on CLS transformed token embedding
         self.ent_dropout = nn.Dropout(0.1)  # dropout on average entity embedding
-        classifier_size = config.hidden_size*3
-        if self.latent_entity_typing:
-            classifier_size += config.hidden_size*2
-        self.classifier = nn.Linear(
-            classifier_size, self.config.num_labels)
-        self.latent_size = config.hidden_size
-        self.latent_type = nn.Parameter(torch.FloatTensor(
-            3, config.hidden_size), requires_grad=True)
-
+        self.classifier = nn.Linear(config.hidden_size*3, self.config.num_labels)
         self.init_weights()
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, e1_mask=None, e2_mask=None, labels=None,

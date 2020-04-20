@@ -26,13 +26,14 @@ from transformers import (WEIGHTS_NAME, BertConfig, BertTokenizer)
 
 from transformers import AdamW, get_linear_schedule_with_warmup
 
-from utils import (RELATION_LABELS, compute_metrics, convert_examples_to_features,
-                   output_modes, data_processors)
+from utils import (SEMEVAL_RELATION_LABELS, TACRED_RELATION_LABELS, compute_metrics, 
+    convert_examples_to_features, output_modes, data_processors)
 import torch.nn.functional as F
 
 from argparse import ArgumentParser
 from config import Config
 from model import BertForSequenceClassification
+
 logger = logging.getLogger(__name__)
 additional_special_tokens = ["[E11]", "[E12]", "[E21]", "[E22]"]
 
@@ -146,19 +147,19 @@ def train(config, train_dataset, model, tokenizer):
                     if config.local_rank == -1 and config.evaluate_during_training:
                         results = evaluate(config, model, tokenizer)
                     logging_loss = tr_loss
-                # if config.local_rank in [-1, 0] and config.save_steps > 0 and global_step % config.save_steps == 0:
-                #     # Save model checkpoint
-                #     output_dir = os.path.join(
-                #         config.output_dir, 'checkpoint-{}'.format(global_step))
-                #     if not os.path.exists(output_dir):
-                #         os.makedirs(output_dir)
-                #     # Take care of distributed/parallel training
-                #     model_to_save = model.module if hasattr(
-                #         model, 'module') else model
-                #     model_to_save.save_pretrained(output_dir)
-                #     torch.save(config, os.path.join(
-                #         output_dir, 'training_config.bin'))
-                #     logger.info("Saving model checkpoint to %s", output_dir)
+                if config.local_rank in [-1, 0] and config.save_steps > 0 and global_step % config.save_steps == 0:
+                    # Save model checkpoint
+                    output_dir = os.path.join(
+                        config.output_dir, 'checkpoint-{}'.format(global_step))
+                    if not os.path.exists(output_dir):
+                        os.makedirs(output_dir)
+                    # Take care of distributed/parallel training
+                    model_to_save = model.module if hasattr(
+                        model, 'module') else model
+                    model_to_save.save_pretrained(output_dir)
+                    torch.save(config, os.path.join(
+                        output_dir, 'training_config.bin'))
+                    logger.info("Saving model checkpoint to %s", output_dir)
 
             if config.max_steps > 0 and global_step > config.max_steps:
                 epoch_iterator.close()
@@ -187,7 +188,7 @@ def evaluate(config, model, tokenizer, prefix=""):
     eval_sampler = SequentialSampler(
         eval_dataset) if config.local_rank == -1 else DistributedSampler(eval_dataset)
     eval_dataloader = DataLoader(
-        eval_dataset, sampler=eval_sampler, batch_size=config.eval_batch_size)
+        eval_dataset, sampler=eval_sampler, batch_size=config.eval_batch_size, shuffle=False)
 
     # Eval!
     logger.info("***** Running evaluation {} *****".format(prefix))
@@ -229,16 +230,24 @@ def evaluate(config, model, tokenizer, prefix=""):
     results.update(result)
     logger.info("***** Eval results {} *****".format(prefix))
     for key in sorted(result.keys()):
-        logger.info("  %s = %s", key, str(result[key]))
-    output_eval_file = "eval/sem_res.txt"
-    with open(output_eval_file, "w") as writer:
-        for key in range(len(preds)):
-            writer.write("%d\t%s\n" %
-                         (key+8001, str(RELATION_LABELS[preds[key]])))
+        logger.info(f"{key} = {result[key]}")
+    
+    if config.task_name == "semeval":
+        output_eval_file = "eval/sem_res.txt"
+        with open(output_eval_file, "w") as writer:
+            for key in range(len(preds)):
+                writer.write("%d\t%s\n" %
+                             (key+8001, str(SEMEVAL_RELATION_LABELS[preds[key]])))
+    elif config.task_name == "tacred":
+        output_eval_file = "eval/tac_res.txt"
+        with open(output_eval_file, "w") as writer:
+            for pred in preds:
+                writer.write(TACRED_RELATION_LABELS[pred])
+                writer.write("\n")
     return result
 
 
-def load_and_cache_examples(config, task, tokenizer, evaluate=False):
+def load_and_cache_examples(config, task, tokenizer, evaluate=False, test=False):
     if config.local_rank not in [-1, 0] and not evaluate:
         # Make sure only the first process in distributed training process the dataset, and the others will use the cache
         torch.distributed.barrier()
@@ -247,8 +256,9 @@ def load_and_cache_examples(config, task, tokenizer, evaluate=False):
     output_mode = "classification"
 
     # Load data features from cache or dataset file
+    evaluation_set_name = 'test' if test else 'dev'
     cached_features_file = os.path.join(config.data_dir, 'cached_{}_{}_{}_{}'.format(
-        'dev' if evaluate else 'train',
+        evaluation_set_name if evaluate else 'train',
         list(filter(None, config.pretrained_model_name.split('/'))).pop(),
         str(config.max_seq_len),
         str(task)))
@@ -327,9 +337,8 @@ def main():
     # Set seed
     set_seed(config.seed)
 
-    # Prepare GLUE task
-    processor = data_processors["semeval"]()
-    output_mode = output_modes["semeval"]
+    # Prepare task -- SemEval or TACRED
+    processor = data_processors[config.task_name]()
     label_list = processor.get_labels()
     num_labels = len(label_list)
 
@@ -339,21 +348,11 @@ def main():
     # Make sure only the first process in distributed training will download model & vocab
     bertconfig = BertConfig.from_pretrained(
         config.pretrained_model_name, num_labels=num_labels, finetuning_task=config.task_name)
-    # './large-uncased-model', num_labels=num_labels, finetuning_task=config.task_name)
-    bertconfig.l2_reg_lambda = config.l2_reg_lambda
-    bertconfig.latent_entity_typing = config.latent_entity_typing
-    if config.l2_reg_lambda > 0:
-        logger.info("using L2 regularization with lambda  %.5f",
-                    config.l2_reg_lambda)
-    if config.latent_entity_typing:
-        logger.info("adding the component of latent entity typing: %s",
-                    str(config.latent_entity_typing))
+    do_lower_case = "-uncased" in config.pretrained_model_name
     tokenizer = BertTokenizer.from_pretrained(
-        'bert-base-uncased', do_lower_case=True, additional_special_tokens=additional_special_tokens)
-    # 'bert-large-uncased', do_lower_case=True, additional_special_tokens=additional_special_tokens)
+        config.pretrained_model_name, do_lower_case=do_lower_case, additional_special_tokens=additional_special_tokens)    
     model = BertForSequenceClassification.from_pretrained(
         config.pretrained_model_name, config=bertconfig)
-    # './large-uncased-model', config=bertconfig)
 
     if config.local_rank == 0:
         # Make sure only the first process in distributed training will download model & vocab
@@ -390,17 +389,16 @@ def main():
             config.output_dir, 'training_config.bin'))
 
         # Load a trained model and vocabulary that you have fine-tuned
-        model = BertForSequenceClassification.from_pretrained(
-            config.output_dir)
+        model = BertForSequenceClassification.from_pretrained(config.output_dir)
         tokenizer = BertTokenizer.from_pretrained(
-            config.output_dir, do_lower_case=True, additional_special_tokens=additional_special_tokens)
+            config.output_dir, do_lower_case=do_lower_case, additional_special_tokens=additional_special_tokens)
         model.to(config.device)
 
     # Evaluation
     results = {}
     if config.eval and config.local_rank in [-1, 0]:
         tokenizer = BertTokenizer.from_pretrained(
-            config.output_dir, do_lower_case=True, additional_special_tokens=additional_special_tokens)
+            config.output_dir, do_lower_case=do_lower_case, additional_special_tokens=additional_special_tokens)
         checkpoints = [config.output_dir]
         if config.eval_all_checkpoints:
             checkpoints = list(os.path.dirname(c) for c in sorted(

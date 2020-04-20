@@ -25,12 +25,12 @@ import logging
 import os
 import sys
 from io import open
+import math
 
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import matthews_corrcoef, f1_score
 
 logger = logging.getLogger(__name__)
-
 
 def clean_str(text):
     text = text.lower()
@@ -70,6 +70,8 @@ def clean_str(text):
 
 
 RELATION_LABELS = ['Other', 'Message-Topic(e1,e2)', 'Message-Topic(e2,e1)',
+# Used for SemEval dataset
+SEMEVAL_RELATION_LABELS = ['Other', 'Message-Topic(e1,e2)', 'Message-Topic(e2,e1)',
                    'Product-Producer(e1,e2)', 'Product-Producer(e2,e1)',
                    'Instrument-Agency(e1,e2)', 'Instrument-Agency(e2,e1)',
                    'Entity-Destination(e1,e2)', 'Entity-Destination(e2,e1)',
@@ -78,6 +80,18 @@ RELATION_LABELS = ['Other', 'Message-Topic(e1,e2)', 'Message-Topic(e2,e1)',
                    'Entity-Origin(e1,e2)', 'Entity-Origin(e2,e1)',
                    'Member-Collection(e1,e2)', 'Member-Collection(e2,e1)',
                    'Content-Container(e1,e2)', 'Content-Container(e2,e1)']
+
+TACRED_RELATION_LABELS = ['org:founded_by', 'no_relation', 'per:employee_of', 'org:alternate_names', 
+    'per:cities_of_residence', 'per:children', 'per:title', 'per:siblings', 'per:religion', 
+    'per:age', 'org:website', 'per:stateorprovinces_of_residence', 'org:member_of', 
+    'org:top_members/employees', 'per:countries_of_residence', 'org:city_of_headquarters', 'org:members', 
+    'org:country_of_headquarters', 'per:spouse', 'org:stateorprovince_of_headquarters', 
+    'org:number_of_employees/members', 'org:parents', 'org:subsidiaries', 'per:origin', 
+    'org:political/religious_affiliation', 'per:other_family', 'per:stateorprovince_of_birth', 
+    'org:dissolved', 'per:date_of_death', 'org:shareholders', 'per:alternate_names', 'per:parents', 
+    'per:schools_attended', 'per:cause_of_death', 'per:city_of_death', 'per:stateorprovince_of_death', 
+    'org:founded', 'per:country_of_birth', 'per:date_of_birth', 'per:city_of_birth', 'per:charges', 
+    'per:country_of_death']
 
 
 class InputExample(object):
@@ -100,19 +114,6 @@ class InputExample(object):
         self.text_b = text_b
         self.label = label
 
-
-# class InputFeatures(object):
-#     """A single set of features of data."""
-
-#     def __init__(self,
-#                  input_ids,
-#                  input_mask,
-#                  segment_ids,
-#                  label_id):
-#         self.input_ids = input_ids
-#         self.input_mask = input_mask
-#         self.segment_ids = segment_ids
-#         self.label_id = label_id
 
 class InputFeatures(object):
     """A single set of features of data."""
@@ -164,43 +165,8 @@ class DataProcessor(object):
             return lines
 
 
-class MrpcProcessor(DataProcessor):
-    """Processor for the MRPC data set (GLUE version)."""
-
-    def get_train_examples(self, data_dir):
-        """See base class."""
-        logger.info("LOOKING AT {}".format(
-            os.path.join(data_dir, "train.tsv")))
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
-
-    def get_dev_examples(self, data_dir):
-        """See base class."""
-        return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
-
-    def get_labels(self):
-        """See base class."""
-        return ["0", "1"]
-
-    def _create_examples(self, lines, set_type):
-        """Creates examples for the training and dev sets."""
-        examples = []
-        for (i, line) in enumerate(lines):
-            logger.info(line)
-            if i == 0:
-                continue
-            guid = "%s-%s" % (set_type, i)
-            text_a = line[4]
-            text_b = line[5]
-            label = RELATION_LABELS.index(line[0])
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
-        return examples
-
-
 class SemEvalProcessor(DataProcessor):
-    """Processor for the MRPC data set (GLUE version)."""
+    """Processor for the SemEval-2010 data set."""
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -225,13 +191,44 @@ class SemEvalProcessor(DataProcessor):
         """
         examples = []
         for (i, line) in enumerate(lines):
-            # if i == 0:
-            #     continue
             guid = "%s-%s" % (set_type, i)
-            logger.info(line)
             text_a = line[1]
             text_b = None
-            #label = RELATION_LABELS.index(int(line[2]))
+            label = line[2]
+            examples.append(
+                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+        return examples
+
+
+class TacredProcessor(DataProcessor):
+    """Processor for the TACRED data set. """
+
+    def get_train_examples(self, data_dir):
+        """See base class."""
+        logger.info("LOOKING AT {}".format(
+            os.path.join(data_dir, "train.tsv")))
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
+
+    def get_dev_examples(self, data_dir):
+        """See base class."""
+        return self._create_examples(
+            self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
+
+    def get_labels(self):
+        """See base class."""
+        return [str(i) for i in range(42)]
+
+    def _create_examples(self, lines, set_type):
+        """Creates examples for the training and dev sets.
+        e.g.,: 
+        2   the [E11] author [E12] of a keygen uses a [E21] disassembler [E22] to look at the raw assembly code .   6
+        """
+        examples = []
+        for (i, line) in enumerate(lines):
+            guid = "%s-%s" % (set_type, i)
+            text_a = line[1]
+            text_b = None
             label = line[2]
             examples.append(
                 InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
@@ -276,8 +273,8 @@ def convert_examples_to_features(examples, label_list, max_seq_len,
             # Account for [CLS] and [SEP] with "- 2" and with "- 3" for RoBERTa.
             special_tokens_count = 2
             if len(tokens_a) > max_seq_len - special_tokens_count:
-                tokens_a = tokens_a[:(max_seq_len - special_tokens_count)]
-
+                tokens_a = _truncate_seq(tokens_a, max_seq_len - special_tokens_count)
+                
         # The convention in BERT is:
         # (a) For sequence pairs:
         #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
@@ -310,7 +307,8 @@ def convert_examples_to_features(examples, label_list, max_seq_len,
 
         # entity mask
         if use_entity_indicator:
-            if "[E22]" not in tokens:  # remove this sentence because after max length truncation, the second entity boundary is broken
+            if "[E22]" not in tokens or "[E12]" not in tokens:  # remove this sentence because after max length truncation, the one entity boundary is broken
+                logger.warning(f"*** Example-{ex_index} is skipped ***")
                 continue 
             else:
                 e11_p = tokens.index("[E11]")+1
@@ -331,14 +329,13 @@ def convert_examples_to_features(examples, label_list, max_seq_len,
             ([pad_token_segment_id] * padding_length)
         if use_entity_indicator:
             e1_mask = [0 for i in range(len(input_mask))]
-
             e2_mask = [0 for i in range(len(input_mask))]
             for i in range(e11_p, e12_p):
                 e1_mask[i] = 1
             for i in range(e21_p, e22_p):
                 e2_mask[i] = 1
 
-        assert len(input_ids) == max_seq_len
+        assert len(input_ids) == max_seq_len, f"Error in sample: {ex_index}, len(input_ids)={len(input_ids)}"
         assert len(input_mask) == max_seq_len
         assert len(segment_ids) == max_seq_len
 
@@ -403,6 +400,41 @@ def _truncate_seq_pair(tokens_a, tokens_b, max_length):
         else:
             tokens_b.pop()
 
+def _truncate_seq(tokens_a, max_length):
+    """Truncates a sequence """
+    tmp = tokens_a[:max_length]
+    if ("[E12]" in tmp) and ("[E22]" in tmp):
+        return tmp
+    else:
+        e11_p = tokens_a.index("[E11]")
+        e12_p = tokens_a.index("[E12]")
+        e21_p = tokens_a.index("[E21]")
+        e22_p = tokens_a.index("[E22]")
+        start = min(e11_p, e12_p, e21_p, e22_p)
+        end = max(e11_p, e12_p, e21_p, e22_p)
+        if end-start > max_length:
+            remaining_length = max_length - (e12_p-e11_p+1) - (e22_p-e21_p+1)  
+            first_addback = math.floor(remaining_length/2)
+            second_addback = remaining_length - first_addback
+            if start == e11_p:
+                new_tokens = tokens_a[e11_p: e12_p+1+first_addback] + tokens_a[e21_p-second_addback:e22_p+1]
+            else:
+                new_tokens = tokens_a[e21_p: e22_p+1+first_addback] + tokens_a[e11_p-second_addback:e12_p+1]
+            return new_tokens
+        else:
+            new_tokens = tokens_a[start:end+1]
+            remaining_length = max_length - len(new_tokens)
+            if start < remaining_length:  # add sentence beginning back
+                new_tokens = tokens_a[:start] + new_tokens 
+                remaining_length -= start
+            else:
+                new_tokens = tokens_a[start-remaining_length:start] + new_tokens
+                return new_tokens
+
+            # still some room left, add sentence end back
+            new_tokens = new_tokens + tokens_a[end+1:end+1+remaining_length]
+            return new_tokens
+
 
 def simple_accuracy(preds, labels):
     return (preds == labels).mean()
@@ -425,15 +457,15 @@ def compute_metrics(task_name, preds, labels):
 
 data_processors = {
     "semeval": SemEvalProcessor,
-    "mrpc": MrpcProcessor,
+    "tacred": TacredProcessor,
 }
 
 output_modes = {
-    "mrpc": "classification",
-    "semeval": "classification"
+    "semeval": "classification",
+    "tacred": "classification",
 }
 
 GLUE_TASKS_NUM_LABELS = {
-    "mrpc": 2,
     "semeval": 19,
+    "tacred": 42,
 }

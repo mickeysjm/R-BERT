@@ -2,6 +2,7 @@
 
 This is an unofficial pytorch implementation of `R-BERT` model described paper [Enriching Pre-trained Language Model with Entity Information for Relation Classification](https://arxiv.org/abs/1905.08284).
 
+In addition to the SemEval 2010 dataset tested in the original paper, I aslo test implementation on the more recent [TACRED](https://nlp.stanford.edu/projects/tacred/) dataset 
 
 ## Requirements:
  
@@ -18,8 +19,20 @@ $ cd R-BERT
 
 ## Train
 
+### SemEval-2010 
+
+The SemEval-2010 dataset is already included in this repo and you can directly run:
+
 ```
-CUDA_VISIBLE_DEVICES=0 python bert.py --config config.ini
+CUDA_VISIBLE_DEVICES=0 python r_bert.py --config config.ini
+```
+
+### TACRED
+
+You need to first download TACRED dataset from [LDC](https://catalog.ldc.upenn.edu/LDC2018T24), which due to the license issue I cannot put in this repo. Then, you can directly run:
+
+```
+CUDA_VISIBLE_DEVICES=0 python r_bert.py --config config_tacred.ini
 ```
 
 ## Eval
@@ -34,16 +47,46 @@ $ bash test.sh
 $ cat res.txt
 ```
 
+### TACRED
+
+First, we generate prediction file `tac_res.txt` 
+
+```
+$ python eval_tacred.py
+```
+
+You may change test file/model path in the `eval_tacred.py` file
+
+Then, we use the official scoring script for TACRED dataset
+
+```
+$ python ./eval/score.py -gold_file <TACRED_DIR/data/gold/test.gold> -pred_file ./eval/tac_res.txt
+```
+
+
 ## Results
 
 ### SemEval-2010
 
-Below the Macro-F1 score
+Below is the Macro-F1 score
 
-|        Model        |     Paper      |     Ours       |
+|        Model        | Original Paper |     Ours       |
 | ------------------- | -------------- | -------------- |
 | BERT-uncased-base   |     ----       |     88.40      |
-| BERT-uncased-large  |     89.25      |     90.16      |
+| BERT-uncased-large  |     89.25      |    **90.16**   |
+
+
+### TACRED
+
+Below is the evaluation result
+
+|        Model        |  Precision (Micro) | Recall (Micro) | F1 (Micro) |   
+| ------------------- | ------------------ | -------------- | ---------- |
+| BERT-uncased-base   |    **72.99**       |   62.50        |    67.34   |
+| BERT-cased-base     |    71.27           |   64.84        |    67.91   |
+| BERT-uncased-large  |    72.91           |   **66.20**    |  **69.39** |
+| BERT-cased-large    |    70.86           |   65.96        |    68.32   |
+
 
 
 ## Reference
